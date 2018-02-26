@@ -18,8 +18,7 @@ em++ \
   -s TOTAL_MEMORY=134217728 \
   --memory-init-file 0 \
   -s USE_HARFBUZZ=1 \
-  -s USE_FREETYPE=1 \
-  -s WASM=1
+  -s USE_FREETYPE=1
 
 echo "Cleaning up vendor/harfbuzz"
 rm vendor/harfbuzz/src/hb-version.h

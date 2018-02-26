@@ -5,5 +5,6 @@
 EMSCRIPTEN_BINDINGS(Renderer) {
   emscripten::class_<Renderer>("Renderer")
     .constructor<>()
-    .function("loadFont", WRAP(&Renderer::LoadFont), emscripten::allow_raw_pointers());
+    .function("loadFont", WRAP(&Renderer::LoadFont))
+    .function("layoutLines", WRAP(&Renderer::LayoutLines));
 }
