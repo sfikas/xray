@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+echo "Setting up vendor/harfbuzz"
+git submodule update --recursive
+script/generate-hb-version vendor/harfbuzz/src/hb-version.h
+
+echo "Compiling glyph_renderer"
+em++ \
+  --bind \
+  src/bindings/*.cc \
+  src/core/*.cc \
+  -O3 \
+  -I src/core \
+  -I vendor/harfbuzz/src \
+  -s TOTAL_MEMORY=134217728 \
+  --memory-init-file 0 \
+  -s USE_HARFBUZZ=1 \
+  -s WASM=1
+
+echo "Cleaning up vendor/harfbuzz"
+rm vendor/harfbuzz/src/hb-version.h
+# export EMSCRIPTEN_COMPILER_FLAGS="-O3 -s WASM=1 -s USE_HARFBUZZ=1"
+# pushd vendor/pango
+# git clean -xdf
+# emconfigure gtkdocize
+# emconfigure autoreconf --force --install
+# emconfigure \
+#   ./configure \
+#   --without-cairo \
+#   --enable-static \
+#   --enable-gtk-doc-html=no \
+#   --disable-doc-cross-references
+#   CFLAGS="$EMSCRIPTEN_COMPILER_FLAGS" \
+#   CXXFLAGS="$EMSCRIPTEN_COMPILER_FLAGS"
+#   CPPFLAGS="$EMSCRIPTEN_COMPILER_FLAGS"
+# emmake make pango
+# popd

@@ -1,0 +1,6 @@
+[submodule "glyph_renderer/vendor/harfbuzz"]
+	path = glyph_renderer/vendor/harfbuzz
+	url = https://github.com/harfbuzz/harfbuzz
+[submodule "glyph_renderer/vendor/freetype2"]
+	path = glyph_renderer/vendor/freetype2
+	url = git://git.sv.nongnu.org/freetype/freetype2.git

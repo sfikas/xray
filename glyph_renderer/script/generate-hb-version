@@ -1,0 +1,25 @@
+#!/usr/bin/env node
+
+const childProcess = require("child_process");
+const fs = require("fs");
+const path = require("path");
+const HARFBUZZ_PATH = path.join(__dirname, "../vendor/harfbuzz");
+
+const hbConfigureTemplate = fs.readFileSync(
+  path.join(HARFBUZZ_PATH, "configure.ac"),
+  "utf8"
+);
+const hbVersion = hbConfigureTemplate.match(/\[(\d.\d.\d)\]/)[1];
+const hbVersionComponents = hbVersion.split(".");
+
+const hbVersionFileTemplate = fs.readFileSync(
+  path.join(HARFBUZZ_PATH, "src/hb-version.h.in"),
+  "utf8"
+);
+const hbVersionFileContent = hbVersionFileTemplate
+  .replace("@HB_VERSION_MAJOR@", hbVersionComponents[0])
+  .replace("@HB_VERSION_MINOR@", hbVersionComponents[1])
+  .replace("@HB_VERSION_MICRO@", hbVersionComponents[2])
+  .replace("@HB_VERSION@", hbVersion);
+
+fs.writeFileSync(process.argv[2], hbVersionFileContent);
