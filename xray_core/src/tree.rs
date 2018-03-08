@@ -103,6 +103,20 @@ impl<'a, T: Item> Tree<T> {
         D::from_summary(self.summary())
     }
 
+    pub fn first(&self) -> &T {
+        match self.0.as_ref() {
+            &Node::Internal { ref children, .. } => children[0].first(),
+            &Node::Leaf { ref value, .. } => value
+        }
+    }
+
+    pub fn last(&self) -> &T {
+        match self.0.as_ref() {
+            &Node::Internal { ref children, .. } => children[children.len() - 1].last(),
+            &Node::Leaf { ref value, .. } => value
+        }
+    }
+
     pub fn push(&mut self, item: T) {
         self.push_tree(Tree(Arc::new(Node::Leaf {
             summary: item.summarize(),
@@ -408,7 +422,7 @@ impl<'tree, T: 'tree + Item> Cursor<'tree, T> {
     pub fn seek<D: Dimension<Summary=T::Summary>>(&mut self, pos: &D, bias: SeekBias) {
         self.seek_and_build_prefix(pos, bias, None);
     }
-				
+
     pub fn build_prefix<D: Dimension<Summary=T::Summary>>(&mut self, end: &D, bias: SeekBias) -> Tree<T> {
         let mut prefix = Tree::new();
         self.seek_and_build_prefix(end, bias, Some(&mut prefix));

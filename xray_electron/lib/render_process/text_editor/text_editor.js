@@ -15,8 +15,47 @@ class TextEditorContainer extends React.Component {
     const editor = new xray.TextEditor(buffer, this.editorChanged.bind(this));
 
     if (props.initialText) {
-      buffer.splice(0, 0, props.initialText);
+      props.initialText = props.initialText.repeat(3);
+      const step = 500;
+      console.log(props.initialText.length / step);
+      for (var i = 0; i < props.initialText.length; i += step) {
+        const text = props.initialText.slice(i, i + step);
+        buffer.splice(i, 0, text);
+      }
     }
+    //
+    for (var i = 0; i < 1000; i++) {
+      editor.addSelection({row: i, column: 0}, {row: i, column: 0});
+    }
+
+    window.addEventListener('keydown', (event) => {
+      switch (event.key) {
+        case 'ArrowLeft':
+          event.shiftKey ? editor.selectLeft() : editor.moveLeft();
+          break;
+        case 'ArrowDown':
+          if (event.shiftKey) {
+            editor.selectDown()
+          } else if (event.altKey) {
+            editor.addSelectionBelow();
+          } else {
+            editor.moveDown();
+          }
+          break;
+        case 'ArrowRight':
+          event.shiftKey ? editor.selectRight() : editor.moveRight();
+          break;
+        case 'ArrowUp':
+          if (event.shiftKey) {
+            editor.selectUp()
+          } else if (event.altKey) {
+            editor.addSelectionAbove();
+          } else {
+            editor.moveUp();
+          }
+          break;
+      }
+    })
 
     this.state = {
       resizeObserver: new ResizeObserver((entries) => this.componentDidResize(entries[0].contentRect)),
@@ -39,9 +78,9 @@ class TextEditorContainer extends React.Component {
 
     element.addEventListener('wheel', this.onWheel, {passive: true});
 
-    this.state.cursorBlinkIntervalHandle = window.setInterval(() => {
-      this.setState({ showCursors: !this.state.showCursors });
-    }, 500);
+    // this.state.cursorBlinkIntervalHandle = window.setInterval(() => {
+    //   this.setState({ showCursors: !this.state.showCursors });
+    // }, 500);
   }
 
   componentWillUnmount() {

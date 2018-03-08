@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::iter;
 use std::ops::{Add, AddAssign, Sub, Range};
 use std::result;
+use std::rc::Rc;
 use std::sync::Arc;
 use super::tree::{self, Tree, SeekBias};
 use notify_cell::NotifyCell;
@@ -85,7 +86,7 @@ struct ChangeId {
 }
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Debug)]
-struct FragmentId(Vec<u16>);
+struct FragmentId(Rc<Vec<u16>>);
 
 #[derive(Eq, PartialEq, Clone, Debug)]
 struct Fragment {
@@ -468,6 +469,24 @@ impl Buffer {
         }
     }
 
+    fn fragment_id_for_anchor(&self, anchor: &Anchor) -> Result<&FragmentId> {
+        match &anchor.0 {
+            &AnchorInner::Start => Ok(&self.fragments.first().id),
+            &AnchorInner::End => Ok(&self.fragments.last().id),
+            &AnchorInner::Middle { ref insertion_id, offset, ref bias } => {
+                let seek_bias = match bias {
+                    &AnchorBias::Left => SeekBias::Left,
+                    &AnchorBias::Right => SeekBias::Right,
+                };
+
+                let splits = self.insertions.get(&insertion_id).ok_or(Error::InvalidAnchor)?;
+                let mut splits_cursor = splits.cursor();
+                splits_cursor.seek(&InsertionOffset(offset), seek_bias);
+                splits_cursor.item().map(|split| &split.fragment_id).ok_or(Error::InvalidAnchor)
+            }
+        }
+    }
+
     pub fn point_for_anchor(&self, anchor: &Anchor) -> Result<Point> {
         match &anchor.0 {
             &AnchorInner::Start => Ok(Point {row: 0, column: 0}),
@@ -507,7 +526,24 @@ impl Buffer {
         })
     }
 
-    pub fn cmp_anchors(&self, a: &Anchor, b: &Anchor) -> Result<cmp::Ordering> {
+    pub fn cmp_anchors_fast(&self, a: &Anchor, b: &Anchor) -> Result<cmp::Ordering> {
+        if a == b {
+            Ok(cmp::Ordering::Equal)
+        } else {
+            match (a.position(), b.position()) {
+                (Some(a_pos), Some(b_pos)) if a_pos.0 == b_pos.0 => {
+                    Ok(a_pos.1.cmp(&b_pos.1))
+                },
+                _ => {
+                    let a_fragment_id = self.fragment_id_for_anchor(&a)?;
+                    let b_fragment_id = self.fragment_id_for_anchor(&b)?;
+                    Ok(a_fragment_id.cmp(&b_fragment_id))
+                }
+            }
+        }
+    }
+
+    pub fn cmp_anchors_slow(&self, a: &Anchor, b: &Anchor) -> Result<cmp::Ordering> {
         let a_offset = self.offset_for_anchor(a)?;
         let b_offset = self.offset_for_anchor(b)?;
         Ok(a_offset.cmp(&b_offset))
@@ -582,6 +618,20 @@ impl Ord for Point {
         a.cmp(&b)
     }
 }
+
+impl Anchor {
+    fn position(&self) -> Option<(ChangeId, usize)> {
+        match &self.0 {
+            &AnchorInner::Middle {
+                ref insertion_id,
+                ref offset,
+                ..
+            } => Some((*insertion_id, *offset)),
+            _ => None,
+        }
+    }
+}
+
 impl<'a> Iter<'a> {
     fn new(buffer: &'a Buffer) -> Self {
         let mut fragment_cursor = buffer.fragments.cursor();
@@ -710,11 +760,11 @@ impl<'a> From<Vec<u16>> for Text {
 
 impl FragmentId {
     fn min_value() -> Self {
-        FragmentId(vec![0 as u16])
+        FragmentId(Rc::new(vec![0 as u16]))
     }
 
     fn max_value() -> Self {
-        FragmentId(vec![u16::max_value()])
+        FragmentId(Rc::new(vec![u16::max_value()]))
     }
 
     fn between(left: &Self, right: &Self) -> Self {
@@ -736,7 +786,7 @@ impl FragmentId {
             }
         }
 
-        FragmentId(new_entries)
+        FragmentId(Rc::new(new_entries))
     }
 }
 
@@ -1148,17 +1198,17 @@ mod tests {
         let anchor_at_offset_1 = buffer.anchor_before_offset(1).unwrap();
         let anchor_at_offset_2 = buffer.anchor_before_offset(2).unwrap();
 
-        assert_eq!(buffer.cmp_anchors(&anchor_at_offset_0, &anchor_at_offset_0), Ok(Ordering::Equal));
-        assert_eq!(buffer.cmp_anchors(&anchor_at_offset_1, &anchor_at_offset_1), Ok(Ordering::Equal));
-        assert_eq!(buffer.cmp_anchors(&anchor_at_offset_2, &anchor_at_offset_2), Ok(Ordering::Equal));
+        assert_eq!(buffer.cmp_anchors_slow(&anchor_at_offset_0, &anchor_at_offset_0), Ok(Ordering::Equal));
+        assert_eq!(buffer.cmp_anchors_slow(&anchor_at_offset_1, &anchor_at_offset_1), Ok(Ordering::Equal));
+        assert_eq!(buffer.cmp_anchors_slow(&anchor_at_offset_2, &anchor_at_offset_2), Ok(Ordering::Equal));
 
-        assert_eq!(buffer.cmp_anchors(&anchor_at_offset_0, &anchor_at_offset_1), Ok(Ordering::Less));
-        assert_eq!(buffer.cmp_anchors(&anchor_at_offset_1, &anchor_at_offset_2), Ok(Ordering::Less));
-        assert_eq!(buffer.cmp_anchors(&anchor_at_offset_0, &anchor_at_offset_2), Ok(Ordering::Less));
+        assert_eq!(buffer.cmp_anchors_slow(&anchor_at_offset_0, &anchor_at_offset_1), Ok(Ordering::Less));
+        assert_eq!(buffer.cmp_anchors_slow(&anchor_at_offset_1, &anchor_at_offset_2), Ok(Ordering::Less));
+        assert_eq!(buffer.cmp_anchors_slow(&anchor_at_offset_0, &anchor_at_offset_2), Ok(Ordering::Less));
 
-        assert_eq!(buffer.cmp_anchors(&anchor_at_offset_1, &anchor_at_offset_0), Ok(Ordering::Greater));
-        assert_eq!(buffer.cmp_anchors(&anchor_at_offset_2, &anchor_at_offset_1), Ok(Ordering::Greater));
-        assert_eq!(buffer.cmp_anchors(&anchor_at_offset_2, &anchor_at_offset_0), Ok(Ordering::Greater));
+        assert_eq!(buffer.cmp_anchors_slow(&anchor_at_offset_1, &anchor_at_offset_0), Ok(Ordering::Greater));
+        assert_eq!(buffer.cmp_anchors_slow(&anchor_at_offset_2, &anchor_at_offset_1), Ok(Ordering::Greater));
+        assert_eq!(buffer.cmp_anchors_slow(&anchor_at_offset_2, &anchor_at_offset_0), Ok(Ordering::Greater));
     }
 
     #[test]

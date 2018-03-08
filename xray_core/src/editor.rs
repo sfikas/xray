@@ -138,7 +138,7 @@ impl Editor {
             // TODO: Clip points or return a result.
             let start_anchor = buffer.anchor_before_point(start).unwrap();
             let end_anchor = buffer.anchor_before_point(end).unwrap();
-            let index = match self.selections.binary_search_by(|probe| buffer.cmp_anchors(&probe.start, &start_anchor).unwrap()) {
+            let index = match self.selections.binary_search_by(|probe| buffer.cmp_anchors_fast(&probe.start, &start_anchor).unwrap()) {
                 Ok(index) => index,
                 Err(index) => index
             };
@@ -198,7 +198,7 @@ impl Editor {
             }
 
             for selection in new_selections {
-                let index = match self.selections.binary_search_by(|probe| buffer.cmp_anchors(&probe.start, &selection.start).unwrap()) {
+                let index = match self.selections.binary_search_by(|probe| buffer.cmp_anchors_fast(&probe.start, &selection.start).unwrap()) {
                     Ok(index) => index,
                     Err(index) => index
                 };
@@ -255,7 +255,7 @@ impl Editor {
             }
 
             for selection in new_selections {
-                let index = match self.selections.binary_search_by(|probe| buffer.cmp_anchors(&probe.start, &selection.start).unwrap()) {
+                let index = match self.selections.binary_search_by(|probe| buffer.cmp_anchors_fast(&probe.start, &selection.start).unwrap()) {
                     Ok(index) => index,
                     Err(index) => index
                 };
@@ -415,9 +415,9 @@ impl Editor {
         let buffer = self.buffer.borrow();
         let mut i = 1;
         while i < self.selections.len() {
-            if buffer.cmp_anchors(&self.selections[i - 1].end, &self.selections[i].start).unwrap() >= Ordering::Equal {
+            if buffer.cmp_anchors_fast(&self.selections[i - 1].end, &self.selections[i].start).unwrap() >= Ordering::Equal {
                 let removed = self.selections.remove(i);
-                if buffer.cmp_anchors(&removed.end, &self.selections[i - 1].end).unwrap() > Ordering::Equal {
+                if buffer.cmp_anchors_fast(&removed.end, &self.selections[i - 1].end).unwrap() > Ordering::Equal {
                     self.selections[i - 1].end = removed.end;
                 }
             } else {
@@ -430,10 +430,10 @@ impl Editor {
         let buffer = self.buffer.borrow();
 
         let start = buffer.anchor_before_point(range.start).unwrap();
-        let start_index = match self.selections.binary_search_by(|probe| buffer.cmp_anchors(&probe.start, &start).unwrap()) {
+        let start_index = match self.selections.binary_search_by(|probe| buffer.cmp_anchors_slow(&probe.start, &start).unwrap()) {
             Ok(index) => index,
             Err(index) => {
-                if index > 0 && buffer.cmp_anchors(&self.selections[index - 1].end, &start).unwrap() == Ordering::Greater {
+                if index > 0 && buffer.cmp_anchors_slow(&self.selections[index - 1].end, &start).unwrap() == Ordering::Greater {
                     index - 1
                 } else {
                     index
@@ -445,7 +445,7 @@ impl Editor {
             &self.selections[start_index..]
         } else {
             let end = buffer.anchor_after_point(range.end).unwrap();
-            let end_index = match self.selections.binary_search_by(|probe| buffer.cmp_anchors(&probe.start, &end).unwrap()) {
+            let end_index = match self.selections.binary_search_by(|probe| buffer.cmp_anchors_slow(&probe.start, &end).unwrap()) {
                 Ok(index) => index,
                 Err(index) => index
             };
@@ -477,7 +477,7 @@ impl Selection {
     }
 
     fn set_head(&mut self, buffer: &Buffer, cursor: Anchor) {
-        if buffer.cmp_anchors(&cursor, self.tail()).unwrap() < Ordering::Equal {
+        if buffer.cmp_anchors_fast(&cursor, self.tail()).unwrap() < Ordering::Equal {
             if !self.reversed {
                 mem::swap(&mut self.start, &mut self.end);
                 self.reversed = true;
